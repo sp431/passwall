@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+# Init script for Xray on GL-SFT1200
+# Persists Xray process across reboots
+START=99
+start() {
+    killall xray xray.real 2>/dev/null
+    sleep 2
+    if [ -f /etc/tyo_config.json ]; then
+        cp /etc/tyo_config.json /tmp/tyo_config.json
+        /usr/bin/xray.real run -c /tmp/tyo_config.json >/tmp/xray.log 2>&1 &
+    fi
+}
+stop() {
+    killall xray xray.real 2>/dev/null
+}
+restart() {
+    stop
+    sleep 1
+    start
+}

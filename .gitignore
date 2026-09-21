@@ -1,0 +1,17 @@
+﻿# Temporary files
+*.tmp
+*~
+.DS_Store
+Thumbs.db
+
+# Sensitive files (never commit)
+*.auth
+*.ovpn
+*secret*
+*password*
+*credential*
+
+# Build artifacts
+*.o
+*.ko
+*.mod.c

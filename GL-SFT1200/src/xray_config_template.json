@@ -1,0 +1,40 @@
+{
+  "log": {"loglevel": "info"},
+  "inbounds": [
+    {
+      "port": 1070,
+      "protocol": "socks",
+      "settings": {"udp": true, "auth": "noauth"},
+      "listen": "127.0.0.1",
+      "tag": "socks-in"
+    },
+    {
+      "port": 1041,
+      "protocol": "dokodemo-door",
+      "streamSettings": {"sockopt": {"tproxy": "redirect"}},
+      "settings": {"network": "tcp,udp", "followRedirect": true},
+      "tag": "tcp_redir"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "socks",
+      "settings": {
+        "servers": [{
+          "address": "YOUR_NODE_ADDRESS",
+          "port": YOUR_NODE_PORT,
+          "users": [{"user": "YOUR_USERNAME", "pass": "YOUR_PASSWORD"}]
+        }]
+      },
+      "streamSettings": {"sockopt": {"mark": 255}},
+      "tag": "proxy"
+    },
+    {"protocol": "freedom", "tag": "direct"},
+    {"protocol": "blackhole", "tag": "blackhole"}
+  ],
+  "routing": {
+    "rules": [
+      {"type": "field", "outboundTag": "proxy", "network": "tcp,udp"}
+    ]
+  }
+}

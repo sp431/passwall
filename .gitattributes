@@ -1,0 +1,18 @@
+# Normalize line endings: all text files use LF in the repo.
+# OpenWrt busybox ash cannot parse CRLF scripts (init scripts fail with
+# ": not found"). This file prevents CRLF from ever being committed again.
+* text=auto eol=lf
+
+# Binary assets - never normalize
+*.apk binary
+*.ipk binary
+*.lmo binary
+*.mo binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.gz binary
+*.tar binary
+*.zip binary
+*.dat binary

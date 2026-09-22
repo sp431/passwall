@@ -1,13 +1,16 @@
 # PassWall
 
-OpenWrt PassWall 代理工具的源码、安装包和配置指南，适配两种路由器型号。
+OpenWrt PassWall 代理工具的源码、安装包和配置指南，适配多种路由器型号。
 
 ## 支持设备
 
 | 型号 | 架构 | 系统 | 包管理器 | 说明 |
 |------|------|------|----------|------|
 | Cudy TR3000 | aarch64_cortex-a53 | OpenWrt 25.12.4 | apk | 256MB 内存，PassWall 26.9.16 源码部署 |
+| Tenda BE12 Pro | aarch64_cortex-a53 | OpenWrt SNAPSHOT r34613（内核 6.18.31） | apk | 512MB 内存 / overlay 仅 65MB，精简安装 |
 | GL.iNet GL-SFT1200 | mipsel (mips32r2) | OpenWrt 18.06 | opkg | 116MB 内存，已安装 PassWall 26.9.16 + Xray v1.8.7 |
+
+> **换行符**：仓库根已加 `.gitattributes`（`* text=auto eol=lf`），在 Windows 上克隆/检出也强制 LF——OpenWrt busybox ash 无法解析 CRLF 脚本。详见各设备 README。
 
 ## 目录结构
 
@@ -15,6 +18,7 @@ OpenWrt PassWall 代理工具的源码、安装包和配置指南，适配两种
 passwall/
 ├── README.md                           # 本文件
 ├── .gitignore
+├── .gitattributes                      # 强制 LF（Windows checkout 也不转 CRLF）
 ├── rudy-TR3000/                        # Cudy TR3000 (aarch64)
 │   ├── README.md                       # 安装说明 + 踩坑记录
 │   ├── scripts/
@@ -48,6 +52,11 @@ passwall/
 │       ├── sing-box-1.13.21-r1.apk     # sing-box 代理核心
 │       ├── v2ray-geoip-*.apk           # GeoIP 数据库
 │       └── v2ray-geosite-*.apk         # GeoSite 域名数据库
+│
+├── BE12_Pro/                           # Tenda BE12 Pro (aarch64, SNAPSHOT)
+│   ├── README.md                       # 安装说明 + 精简安装/CRLF 踩坑
+│   └── scripts/
+│       └── install-passwall.sh         # 复用 rudy-TR3000/src，核心从 passwall2 仓库拉
 │
 └── GL-SFT1200/                        # GL.iNet GL-SFT1200 (mipsel)
     ├── README.md                      # 安装说明（含已知问题和解决方案）

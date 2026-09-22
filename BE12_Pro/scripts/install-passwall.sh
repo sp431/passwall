@@ -5,20 +5,31 @@
 #           内核 6.18.31, aarch64_cortex-a53, apk, 512MB RAM, overlay 65MB
 # 用法: cd /tmp/passwall && sh BE12_Pro/scripts/install-passwall.sh
 #
-# 实测可行的安装路径（2026-09-22）：
+# 实测可行的安装路径（2026-09-22，2026-09-23 更新）：
 #   * PassWall 源码 = 本仓库 rudy-TR3000/src（跨内核通用），部署到根
-#   * 核心 apk（Xray/chinadns-ng/geoview/geo）= sp431/passwall2 仓库，
+#   * Xray 核心 = 本仓库 BE12_Pro/packages/xray-26.7.11（XTLS 官方 arm64 静态
+#     二进制，随仓库携带，直接复制到 /usr/bin/xray）。
+#     ⚠️ 新版 util_xray.lua 硬门禁 xray_min_version="26.7.11"，旧 26.3.27
+#     会让 url_test/正式配置校验失败（ruleTag/finalRules/version.min 新字段）。
+#     注意 XTLS v26.4 之后均为 prerelease，/releases/latest 仍停在 26.3.27，
+#     要从 tags 页取 26.7.11。
+#   * 其余核心 apk（chinadns-ng/geoview/geo）= sp431/passwall2 仓库，
 #     设备直接从 GitHub raw 串行下载 + wc -c 逐字节校验（Go 核心静态编译，
 #     不挑内核版本）。官方 downloads.openwrt.org 大核心在本设备常超时。
-#   * 精简安装：overlay 仅 65MB，只装下列 6 个包，sing-box/hysteria 按需另补。
+#   * 精简安装：overlay 仅 65MB，sing-box/hysteria 按需另补。
 # ============================================================
 set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 SRC="$HERE/../../rudy-TR3000/src"
+PKGDIR="$HERE/../packages"
 STAGE="/tmp/pw_pkgs"
 
 PW2="https://raw.githubusercontent.com/sp431/passwall2/master/rudy-TR3000/packages"
+
+# Xray 裸核心（随仓库携带，本地复制，不走网络）
+XRAY_LOCAL="$PKGDIR/xray-26.7.11"
+XRAY_EXPECT=35258494
 
 # name|expected_bytes（改版本时同步更新 size，可用 GitHub API 查）
 PKGS="
@@ -26,7 +37,6 @@ chinadns-ng-2025.08.09-r1.apk|270130
 geoview-0.2.6-r1.apk|2974684
 v2ray-geoip-202607171233-r1.apk|4434302
 v2ray-geosite-20260726062913-r1.apk|661857
-xray-core-26.3.27-r1.apk|10752795
 tcping-0.3-r1.apk|4265
 "
 
@@ -71,6 +81,15 @@ done
 log "3/5 安装核心 apk"
 apk add --allow-untrusted "$STAGE"/*.apk \
     || { warn "核心安装失败"; exit 1; }
+
+log "    部署 Xray 26.7.11 裸核心 -> /usr/bin/xray"
+[ -f "$XRAY_LOCAL" ] || { warn "找不到 $XRAY_LOCAL"; exit 1; }
+xgot=$(wc -c < "$XRAY_LOCAL")
+[ "$xgot" = "$XRAY_EXPECT" ] || { warn "Xray 字节数异常 $xgot/$XRAY_EXPECT"; exit 1; }
+[ -f /usr/bin/xray ] && cp -a /usr/bin/xray "/usr/bin/xray.bak-pre26.7.11-$(date +%Y%m%d%H%M%S)"
+cp -f "$XRAY_LOCAL" /usr/bin/xray
+chmod 755 /usr/bin/xray
+/usr/bin/xray version 2>&1 | head -1
 
 log "    部署 src/ -> /"
 cd "$SRC" || exit 1

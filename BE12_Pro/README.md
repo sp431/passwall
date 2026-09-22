@@ -24,7 +24,7 @@ cd /tmp/passwall
 sh BE12_Pro/scripts/install-passwall.sh
 ```
 
-脚本流程：备份 → 装小包依赖 → 从 GitHub raw 串行下载核心 apk 并逐字节校验 → 安装核心 → 部署源码 → 权限自检 → 启用开机自启。
+脚本流程：备份 → 装小包依赖 → 从 GitHub raw 串行下载核心 apk 并逐字节校验 → 安装核心 apk → **复制随仓库携带的 Xray 26.7.11 裸核心到 /usr/bin/xray** → 部署源码 → 权限自检 → 启用开机自启。
 
 安装后页面：`http://<设备IP>/cgi-bin/luci/admin/services/passwall`（实测 200）。
 
@@ -34,7 +34,7 @@ overlay 仅 65 MB，脚本默认只装：
 
 | 组件 | 版本 | 来源 |
 |---|---|---|
-| Xray | 26.3.27 | sp431/passwall2 apk |
+| Xray | **26.7.11** | 本仓库 `BE12_Pro/packages` 裸二进制 |
 | chinadns-ng | 2025.08.09 | sp431/passwall2 apk |
 | geoview | 0.2.6 | sp431/passwall2 apk |
 | v2ray-geoip / geosite | 2026-07 | sp431/passwall2 apk |
@@ -61,6 +61,9 @@ overlay 仅 65 MB，脚本默认只装：
 3. **PassWall 一代无官方 apk**：OpenWrt 官方 snapshot 源只有 PassWall2，本设备走**源码部署**，不在 apk 数据库，卸载需手工。
 
 4. **world 残留约束**：安装失败后 `/etc/apk/world` 可能留未满足约束，导致 apk 全面报错。须手工删掉残留行后一次性装齐（详见仓库根 skill 说明）。
+
+5. **Xray 版本硬门禁（2026-09-23）**：新版 `util_xray.lua` 第 15 行写死 `xray_min_version = "26.7.11"`，生成配置带 `"version":{"min":"26.7.11"}` 与 `ruleTag`/`finalRules` 新字段。旧 26.3.27 启动即报 `app/version: this config must be run on version 26.7.11 or higher`，socks 端口起不来，前端表现为「SOCKS: 1081 不可用」。
+   ⚠️ XTLS 自 v26.4 起全部标记 **prerelease**，`/releases/latest` 仍停在 26.3.27，需到 [tags 列表](https://github.com/XTLS/Xray-core/tags) 取 `Xray-linux-arm64-v8a.zip`，解压出裸 `xray` 替换 `/usr/bin/xray`（旧核心已备份为 `/usr/bin/xray.bak-26.3.27-20260923`）。本仓库已把该核心放在 `BE12_Pro/packages/xray-26.7.11`，脚本直接本地复制。
 
 ## 卸载（源码部署，无 apk）
 

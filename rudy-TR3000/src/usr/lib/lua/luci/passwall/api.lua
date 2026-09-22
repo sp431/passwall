@@ -1624,6 +1624,100 @@ function type_cbi_section(s, s2)
 	end
 end
 
+function luci_types(s1, s)
+	local cbi = require "luci.cbi"
+	local sec = s1.section
+	local fvtype = s1.fields["type"] and s1.fields["type"]:formvalue(sec)
+
+	-- 1) 为内层 s 中每个字段安装“类型感知”的读写/删除与依赖
+	for key, obj in pairs(s.fields) do
+		if key ~= "type" then
+			obj.config_option = obj.config_option or key
+
+			obj.cfgvalue = function(self, section)
+				if self.rewrite_option then
+					return self.map:get(section, self.rewrite_option)
+				end
+				return self.map:get(section, self.config_option)
+			end
+
+			obj.write = function(self, section, value)
+				if fvtype ~= s.type_name then
+					return
+				end
+				local new_val = value
+				if util.instanceof(self, cbi.DynamicList) then
+					local new_t = {}
+					if type(value) == "table" then
+						new_t = table_remove_duplicates(value)
+					else
+						new_t = { value }
+					end
+					if self.cast == "string" then
+						new_val = table.concat(new_t, " ")
+					else
+						new_val = new_t
+					end
+				end
+				if self.rewrite_option then
+					self.map:set(section, self.rewrite_option, new_val)
+				else
+					self.map:set(section, self.config_option, new_val)
+				end
+			end
+
+			obj.remove = function(self, section)
+				if fvtype ~= s.type_name then
+					return
+				end
+				if self.rewrite_option then
+					self.map:del(section, self.rewrite_option)
+				else
+					self.map:del(section, self.config_option)
+				end
+			end
+
+			obj.deplist2json = function(self, section, deplist)
+				local deps = { }
+				if type(self.deps) == "table" then
+					if not next(self.deps) then
+						self:depends({ type = s.type_name })
+					end
+					local list = deplist or self.deps
+					for i, d in ipairs(list) do
+						if s.type_name and not d["type"] then
+							d["type"] = s.type_name
+						end
+						local a = { }
+						for k, v in pairs(d) do
+							if k:find("!", 1, true) then
+								a[k] = v
+							elseif k:find("^", 1, true) then
+								a[k:sub(2)] = v
+							elseif k:find(".", 1, true) then
+								a['cbid%s' % k] = v
+							elseif s1.fields[k] then
+								a['cbid.%s.%s.%s' %{ self.config, section, s1.fields[k].option }] = v
+							else
+								a['cbid.%s.%s.%s' %{ self.config, section, k }] = v
+							end
+						end
+						deps[#deps+1] = a
+					end
+				end
+				return util.serialize_json(deps)
+			end
+		end
+	end
+
+	-- 2) 把内层字段并入外层 NamedSection，使其在当前节点下渲染
+	for i, v in ipairs(s.children) do
+		s1:append(v)
+		s1.fields[v.config_option or v.option] = v
+	end
+end
+
+
 function return_map(map)
 	local cbi = require "luci.cbi"
 	if true then

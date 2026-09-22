@@ -6,7 +6,7 @@ OpenWrt PassWall 代理工具的源码、安装包和配置指南，适配两种
 
 | 型号 | 架构 | 系统 | 包管理器 | 说明 |
 |------|------|------|----------|------|
-| Cudy TR3000 | aarch64_cortex-a53 | OpenWrt 25.12.4 | apk | 256MB 内存，PassWall 共享依赖 |
+| Cudy TR3000 | aarch64_cortex-a53 | OpenWrt 25.12.4 | apk | 256MB 内存，PassWall 26.9.16 源码部署 |
 | GL.iNet GL-SFT1200 | mipsel (mips32r2) | OpenWrt 18.06 | opkg | 116MB 内存，已安装 PassWall 26.9.16 + Xray v1.8.7 |
 
 ## 目录结构
@@ -16,31 +16,36 @@ passwall/
 ├── README.md                           # 本文件
 ├── .gitignore
 ├── rudy-TR3000/                        # Cudy TR3000 (aarch64)
-│   ├── README.md                       # 安装说明
-│   ├── src/                            # PassWall 源码
+│   ├── README.md                       # 安装说明 + 踩坑记录
+│   ├── scripts/
+│   │   └── install-passwall.sh         # 一键安装脚本
+│   ├── src/                            # 设备根文件系统的镜像（见下方映射说明）
 │   │   ├── etc/
-│   │   │   └── init.d/
-│   │   │       ├── passwall            # 主服务 init 脚本
-│   │   │       └── passwall_server     # 服务器端 init 脚本
-│   │   └── usr/
-│   │       ├── lib/lua/luci/           # LuCI 前端 (controller, model, view, i18n)
-│   │       └── share/passwall/         # PassWall 核心脚本
-│   │           ├── 0_default_config    # 默认配置
-│   │           ├── app.sh              # 主应用脚本
-│   │           ├── utils.sh            # 工具函数
-│   │           ├── iptables.sh         # iptables 防火墙规则
-│   │           ├── nftables.sh         # nftables 防火墙规则
-│   │           ├── monitor.sh          # 进程监控
-│   │           ├── subscribe.lua       # 订阅管理
-│   │           ├── rule_update.lua     # 规则更新
-│   │           ├── helper_dnsmasq.lua  # DNS 分流辅助
-│   │           ├── haproxy.lua         # 负载均衡
-│   │           ├── tasks.sh            # 定时任务
-│   │           ├── test.sh             # 连通性测试
-│   │           └── ...                 # 其他脚本和规则
-│   └── packages/                      # .apk 安装包
-│       ├── xray-core-26.3.27-r1.apk   # Xray 代理核心
-│       ├── sing-box-1.13.21-r1.apk    # sing-box 代理核心
+│   │   │   ├── config/
+│   │   │   │   └── passwall_server     # 服务端默认配置
+│   │   │   ├── hotplug.d/
+│   │   │   │   ├── iface/98-passwall   # 接口上线时重载
+│   │   │   │   └── ntp/30-passwall-resync  # NTP 校时后重同步
+│   │   │   ├── init.d/
+│   │   │   │   ├── passwall            # 主服务 init 脚本
+│   │   │   │   └── passwall_server     # 服务器端 init 脚本
+│   │   │   └── uci-defaults/           # 首次启动初始化脚本
+│   │   ├── usr/
+│   │   │   ├── lib/lua/luci/           # LuCI 前端
+│   │   │   │   ├── controller/passwall.lua
+│   │   │   │   ├── model/cbi/passwall/ # 配置页面模型
+│   │   │   │   ├── view/passwall/      # 视图模板
+│   │   │   │   ├── passwall/           # 核心 Lua 模块（api/com/util_*）
+│   │   │   │   └── i18n/passwall.zh-cn.lmo
+│   │   │   └── share/
+│   │   │       ├── passwall/           # 核心 shell/lua 脚本与规则库
+│   │   │       ├── rpcd/acl.d/         # 权限声明
+│   │   │       └── ucitrack/           # 配置变更跟踪
+│   │   └── www/                        # → 设备 /www（LuCI 静态资源）
+│   │       └── luci-static/resources/view/passwall/  # cbi.js / func.js 等前端 JS
+│   └── packages/                       # .apk 安装包
+│       ├── xray-core-26.3.27-r1.apk    # Xray 代理核心
+│       ├── sing-box-1.13.21-r1.apk     # sing-box 代理核心
 │       ├── v2ray-geoip-*.apk           # GeoIP 数据库
 │       └── v2ray-geosite-*.apk         # GeoSite 域名数据库
 │
@@ -53,19 +58,45 @@ passwall/
         └── tyo_xray.init              # OpenWrt init 启动脚本
 ```
 
+## src/ 与设备路径的映射约定
+
+`rudy-TR3000/src/` 是**设备根文件系统的镜像**：
+
+| 仓库路径 | 设备路径 |
+|----------|----------|
+| `src/etc/` | `/etc/` |
+| `src/usr/` | `/usr/` |
+| `src/www/` | `/www/` |
+
+因此可以整目录还原：
+
+```sh
+cd rudy-TR3000/src && tar -cf - etc usr www | (cd / && tar -xf -)
+```
+
 ## 文件用途
 
 ### rudy-TR3000/src/ — PassWall 源码
 
-从 Cudy TR3000 路由器（OpenWrt 25.12.4）上提取的 PassWall 完整源码。
+与 OpenWrt 官方 `luci-app-passwall` 包（tag 26.9.16-1）对齐的完整源码。
 
 | 路径 | 用途 |
 |------|------|
 | `etc/init.d/passwall` | PassWall 主服务启动/停止脚本 |
 | `etc/init.d/passwall_server` | PassWall 服务器端启动脚本 |
+| `etc/hotplug.d/iface/98-passwall` | 网络接口上线时自动重载代理 |
+| `etc/hotplug.d/ntp/30-passwall-resync` | NTP 校时后重新同步 |
+| `etc/uci-defaults/luci-app-passwall*` | 首次启动的默认配置初始化 |
+| `etc/config/passwall_server` | 服务端默认 UCI 配置 |
 | `usr/lib/lua/luci/controller/passwall.lua` | LuCI 菜单控制器 |
+| `usr/lib/lua/luci/passwall/api.lua` | 核心 API 模块（**缺失会导致整个 LuCI 500**） |
+| `usr/lib/lua/luci/passwall/com.lua` | 通用功能模块 |
+| `usr/lib/lua/luci/passwall/util_*.lua` | 各协议后端（xray / sing-box / hysteria2 / naiveproxy / shadowsocks） |
 | `usr/lib/lua/luci/model/cbi/passwall/` | LuCI 配置页面模型 |
 | `usr/lib/lua/luci/view/passwall/` | LuCI 视图模板 |
+| `www/luci-static/resources/view/passwall/` | 前端 JS（cbi.js / func.js / Sortable.min.js / qrcode.min.js） |
+| `usr/share/rpcd/acl.d/luci-app-passwall.json` | LuCI 权限声明 |
+| `usr/share/ucitrack/luci-app-passwall*.json` | 配置变更跟踪声明 |
 | `usr/share/passwall/app.sh` | 主应用逻辑（生成配置、启动/停止代理） |
 | `usr/share/passwall/utils.sh` | 通用工具函数 |
 | `usr/share/passwall/iptables.sh` | iptables 防火墙规则管理 |
@@ -79,6 +110,12 @@ passwall/
 | `usr/share/passwall/test.sh` | 节点连通性测试 |
 | `usr/share/passwall/0_default_config` | UCI 默认配置 |
 
+### rudy-TR3000/scripts/ — 安装脚本
+
+| 文件 | 用途 |
+|------|------|
+| `install-passwall.sh` | 一键完成：备份 → 装依赖 → 装核心包 → 部署 src → 权限 → 清缓存启用 |
+
 ### rudy-TR3000/packages/ — .apk 安装包
 
 | 文件 | 版本 | 说明 |
@@ -86,7 +123,10 @@ passwall/
 | `xray-core-26.3.27-r1.apk` | 26.3.27 | Xray 代理核心 |
 | `sing-box-1.13.21-r1.apk` | 1.13.21 | sing-box 代理核心 |
 | `v2ray-geoip-*.apk` | 2026-07-17 | GeoIP 数据库 |
-| `v2ray-geosite-*.apk` | 2026-08-08 | GeoSite 域名数据库 |
+| `v2ray-geosite-*.apk` | 2026-08-26 | GeoSite 域名数据库 |
+
+其余体积较小的依赖（hysteria / geoview / chinadns-ng / naiveproxy / shadowsocks-rust 等）
+从 OpenWrt 官方源安装即可，无需离线打包。
 
 ### GL-SFT1200/src/ — 兼容性脚本
 
@@ -103,19 +143,37 @@ GL.iNet GL-SFT1200 使用 OpenWrt 18.06 + Xray v1.8.7，与 PassWall 26.9.16 存
 
 ### Cudy TR3000 (rudy-TR3000)
 
-```bash
-# 通过 apk 安装（推荐）
-apk update
-apk add luci-app-passwall luci-i18n-passwall-zh-cn xray-core sing-box \
-  chinadns-ng v2ray-geoip v2ray-geosite
+推荐用一键脚本：
 
-# 或从本仓库安装
-cp -r src/usr/share/passwall /usr/share/passwall
-cp src/etc/init.d/passwall /etc/init.d/passwall
-cp src/etc/init.d/passwall_server /etc/init.d/passwall_server
-cp packages/*.apk /tmp/ && apk add /tmp/*.apk
+```bash
+cd /tmp/rudy-TR3000 && sh scripts/install-passwall.sh
+```
+
+手动安装（等价步骤）：
+
+```bash
+# 1) 装共享依赖
+apk update
+apk add xray-core sing-box chinadns-ng geoview hysteria naiveproxy \
+  shadowsocks-rust-sslocal shadowsocks-rust-ssserver \
+  shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir shadowsocksr-libev-ssr-server \
+  simple-obfs-client tcping v2ray-geoip v2ray-geosite v2ray-plugin
+
+# 2) 装本仓库核心包
+for f in packages/*.apk; do apk add --allow-untrusted "$f"; done
+
+# 3) 按映射部署源码
+cd src && tar -cf - etc usr www | (cd / && tar -xf -)
+
+# 4) 权限 + 启用
+chmod +x /etc/init.d/passwall /etc/init.d/passwall_server /usr/share/passwall/*.sh
+rm -f /tmp/luci-indexcache* ; rm -rf /tmp/luci-modulecache
 /etc/init.d/passwall enable
 ```
+
+> **PassWall 一代没有可用的官方 apk 源**（OpenWrt 官方源与 SourceForge 的
+> `openwrt-passwall-build` 只提供 PassWall2），所以本设备采用源码部署，
+> 不在 apk 数据库中，`apk del` 无法卸载。
 
 ### GL.iNet GL-SFT1200 (GL-SFT1200)
 
@@ -127,7 +185,21 @@ cp packages/*.apk /tmp/ && apk add /tmp/*.apk
 4. 使用 `xray_config_template.json` 模板配置代理节点
 5. 部署 `tyo_xray.init` 实现开机自启
 
-## 已知问题（GL-SFT1200）
+## 已知问题
+
+### Cudy TR3000
+
+| 问题 | 原因 | 解决方案 |
+|------|------|----------|
+| 整个 LuCI 后台 500 | 缺 `usr/lib/lua/luci/passwall/` 核心模块，controller 加载失败会在菜单构建阶段拖垮全部页面 | 补齐该目录；应急时先移走 `controller/passwall.lua` |
+| 页面能打开但交互失效 | 缺 `www/luci-static/resources/view/passwall/` 前端 JS | 补 `src/www/` 目录 |
+| `apk` 报 unresolved dependencies | 批量安装失败在 `/etc/apk/world` 留下未满足的约束 | 手工编辑 world 删掉残留行，再一次性装齐 |
+| 下载的 apk 提取失败 | 并行下载被截断（包尺寸不符） | 串行下载 + 用 `wc -c` 校验字节数 |
+| SourceForge 无法下载 | 部分网络下大文件连接中断 | 改用 GitHub 或 OpenWrt 官方源 |
+
+详细排查过程见 [rudy-TR3000/README.md](rudy-TR3000/README.md#踩坑记录实测)。
+
+### GL-SFT1200
 
 | 问题 | 原因 | 解决方案 |
 |------|------|----------|
@@ -139,6 +211,7 @@ cp packages/*.apk /tmp/ && apk add /tmp/*.apk
 ## 注意事项
 
 - 配置模板中使用 `YOUR_NODE_ADDRESS` 等占位符，请勿提交真实节点信息
-- PassWall 和 PassWall2 共享部分依赖包（xray-core, sing-box 等）
+- PassWall 和 PassWall2 共享部分依赖包（xray-core, sing-box 等），建议只启用其中一个
 - Xray 版本需与设备架构匹配，详见各设备 README
 - OpenWrt 25.x 使用 apk 包管理器，OpenWrt 18.06 使用 opkg
+- OpenWrt 25.x 的 busybox 无 `stat` 命令，查看文件大小用 `wc -c`

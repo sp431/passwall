@@ -7,10 +7,12 @@
 # 用法: 把本目录放设备后  cd XE300 && sh scripts/install-passwall.sh
 #
 # 特点（2026-09-24 实测）：
-#   * 完全离线：全部 18 个 ipk 已随本仓放在 XE300/packages/，
+#   * 完全离线：全部 23 个 ipk 已随本仓放在 XE300/packages/，
 #     opkg 本地安装，不依赖任何网络源。
 #   * 设备仅配 GL.iNet 源（fw.gl-inet.com），实测该域名当前不可达；
 #     透明代理所需 kmod（TPROXY/conntrack-extra/nat/ifb…）GL 固件已自带。
+#   * 另含 socket/iprange 扩展（fw4 回退 iptables 时必需，否则被判
+#     "非代理模式"不下发规则）：iptables-mod-socket/-iprange + 对应 3 个 kmod。
 #   * 安装版本：luci-app-passwall 26.9.16 / xray-core 26.9.9 /
 #     chinadns-ng 2025.08.09 / geoview 0.2.6 + 中文包。
 # ============================================================
@@ -41,6 +43,14 @@ for m in xt_TPROXY nf_tproxy_ipv4 xt_REDIRECT ifb; do
         warn "未找到 $m.ko（若 TPROXY 异常需另装匹配 kmod）"
     fi
 done
+# socket/iprange 由本仓 ipk 提供（GL 固件不带），安装后再确认
+for m in xt_socket xt_iprange nf_socket_ipv4; do
+    if [ -f "/lib/modules/$(uname -r)/$m.ko" ]; then
+        log "    模块文件存在 $m"
+    else
+        warn "未找到 $m.ko（应在稍后随 ipk 安装）"
+    fi
+done
 
 # ---------- 2. 离线安装全部 ipk ----------
 log "本地离线安装 packages/ 下全部 ipk（约 23MB，NAND 写入较慢请耐心等待）"
@@ -55,6 +65,13 @@ chmod 755 /etc/init.d/passwall /etc/init.d/passwall_server 2>/dev/null
 /etc/init.d/passwall_server enable 2>/dev/null
 rm -f /tmp/luci-indexcache* 2>/dev/null
 rm -rf /tmp/luci-modulecache 2>/dev/null
+
+# ---------- 4. socket/iprange 可用性确认（缺则透明代理被判非代理模式） ----------
+if iptables -m socket -h >/dev/null 2>&1 && iptables -m iprange -h >/dev/null 2>&1; then
+    log "iptables socket/iprange 扩展可用"
+else
+    warn "iptables socket/iprange 仍不可用，请检查 kmod 是否匹配内核"
+fi
 
 log "完成。核心版本：$(xray version 2>/dev/null | head -1)"
 log "页面: http://192.168.8.1/cgi-bin/luci/admin/services/passwall"

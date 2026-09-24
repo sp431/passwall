@@ -1,6 +1,6 @@
 # GL.iNet GL-XE300 — PassWall 离线安装说明
 
-本目录为 **GL.iNet GL-XE300(NOR/NAND)** 的 PassWall 安装支持。与其他设备不同，本机 **完全离线安装**：全部 18 个 ipk 已随本仓放在 `XE300/packages/`，opkg 本地安装，不依赖任何网络源。
+本目录为 **GL.iNet GL-XE300(NOR/NAND)** 的 PassWall 安装支持。与其他设备不同，本机 **完全离线安装**：全部 23 个 ipk 已随本仓放在 `XE300/packages/`，opkg 本地安装，不依赖任何网络源。
 
 ## 设备信息（实测 2026-09-24）
 
@@ -31,7 +31,7 @@ sh scripts/install-passwall.sh
 安装后页面：`http://192.168.8.1/cgi-bin/luci/admin/services/passwall`（实测 HTTP 200）。
 全局开关默认关闭，**添加节点后在页面手动启用**。
 
-## 版本清单（packages/，共 18 个 ipk，约 23 MB）
+## 版本清单（packages/，共 23 个 ipk）
 
 | 组件 | 版本 |
 |---|---|
@@ -46,6 +46,8 @@ sh scripts/install-passwall.sh
 | coreutils / -base64 / -nohup / -timeout | 9.0-2 |
 | luci-compat | git-23.093.42303 |
 | libyaml / lyaml | 0.2.5 / 6.2.7 |
+| iptables-mod-socket / -iprange | 1.8.7（透明代理 match 扩展） |
+| kmod-nf-socket / kmod-ipt-socket / kmod-ipt-iprange | 5.10.176（对应内核模块） |
 
 > `coreutils` 是仅依赖 libc 的空壳 meta 包（967 B，无载荷），属正常。
 > ipk 来源为官方预编译 feed **openwrt-passwall-build（SourceForge）** 的 `packages-22.03/mips_24kc/`，ipk 外层为 tar.gz（内含 debian-binary / data.tar.gz / control.tar.gz），opkg 正常支持。
@@ -80,6 +82,11 @@ sh scripts/install-passwall.sh
 7. **NAND 写入慢，安装中途查不到包**
    opkg 先解包落盘（overlay 增长），再逐个 postinst，最后一次性「Configuring…Updating database」。期间可能出现 `D` 态 `balance_dirty_pages`（UBI/NAND 刷盘慢）与卡在 `luci-app-passwall.postinst`（对 init 脚本 enable+start），耐心等待即可，**不要中途强杀**以免损坏数据库。
 
+8. **fw4 环境不完整 → 回退 iptables，且缺 socket/iprange（2026-09-24 实测）**
+   GL 固件虽带 firewall4 / nft，但 PassWall 检测 `dnsmasq_nftset:0`（dnsmasq-full 无 nftset 支持），打印「nftables (fw4) 应用环境不完整，切换至 iptables」。而 iptables 路径又**缺少 `socket`、`iprange` 两个基础 match 扩展**（用户态 `/usr/lib/iptables/libxt_*.so` 与内核 `xt_socket`/`xt_iprange` 都没有），PassWall 判定为「非代理模式，仅允许服务启停」，不下发透明代理规则。
+   **修复**：补装本目录已随仓的 5 个 ipk（`opkg install packages/*.ipk` 会一并装上）——3 个 kmod（kmod-nf-socket、kmod-ipt-socket、kmod-ipt-iprange）+ 2 个用户态扩展（iptables-mod-socket、iptables-mod-iprange）。装完 `lsmod` 见 `xt_socket`/`xt_iprange`，重启 PassWall 即正常下发规则。
+   ⚠️ 这些 kmod 必须与设备内核**精确匹配**（本机内核 5.10.176，官方 22.03.4 target feed 正是 5.10.176，哈希一致可装）。
+
 ## 卸载
 
 ipk 已注册进 opkg 数据库，可正常卸载：
@@ -88,5 +95,7 @@ ipk 已注册进 opkg 数据库，可正常卸载：
 /etc/init.d/passwall stop
 opkg remove luci-i18n-passwall-zh-cn luci-app-passwall xray-core \
   chinadns-ng geoview ipt2socks dns2socks microsocks tcping \
-  v2ray-geoip v2ray-geosite lyaml libyaml luci-compat coreutils-* coreutils
+  v2ray-geoip v2ray-geosite lyaml libyaml luci-compat coreutils-* coreutils \
+  iptables-mod-socket iptables-mod-iprange \
+  kmod-ipt-socket kmod-ipt-iprange kmod-nf-socket
 ```

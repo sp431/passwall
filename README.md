@@ -9,6 +9,7 @@ OpenWrt PassWall 代理工具的源码、安装包和配置指南，适配多种
 | Cudy TR3000 | aarch64_cortex-a53 | OpenWrt 25.12.4 | apk | 256MB 内存，PassWall 26.9.16 源码部署 |
 | Tenda BE12 Pro | aarch64_cortex-a53 | OpenWrt SNAPSHOT r34613（内核 6.18.31） | apk | 512MB 内存 / overlay 仅 65MB，精简安装 |
 | GL.iNet GL-SFT1200 | mipsel (mips32r2) | OpenWrt 18.06 | opkg | 116MB 内存，已安装 PassWall 26.9.16 + Xray v1.8.7 |
+| GL.iNet GL-XE300 | mips_24kc (大端) | OpenWrt 22.03.4 | opkg | 121MB 内存 / overlay 98MB，**完全离线**安装 PassWall 26.9.16 + Xray 26.9.9 |
 
 > **换行符**：仓库根已加 `.gitattributes`（`* text=auto eol=lf`），在 Windows 上克隆/检出也强制 LF——OpenWrt busybox ash 无法解析 CRLF 脚本。详见各设备 README。
 
@@ -58,13 +59,22 @@ passwall/
 │   └── scripts/
 │       └── install-passwall.sh         # 复用 rudy-TR3000/src，核心从 passwall2 仓库拉
 │
-└── GL-SFT1200/                        # GL.iNet GL-SFT1200 (mipsel)
-    ├── README.md                      # 安装说明（含已知问题和解决方案）
-    └── src/                           # 兼容性脚本和配置模板
-        ├── xray_wrapper.sh             # Xray 配置包装器（修复 tunnel→dokodemo-door）
-        ├── start_xray.sh               # 手动启动 Xray 脚本
-        ├── xray_config_template.json   # Xray 配置模板（占位符，需填入节点信息）
-        └── tyo_xray.init              # OpenWrt init 启动脚本
+├── GL-SFT1200/                        # GL.iNet GL-SFT1200 (mipsel)
+│   ├── README.md                      # 安装说明（含已知问题和解决方案）
+│   └── src/                           # 兼容性脚本和配置模板
+│       ├── xray_wrapper.sh             # Xray 配置包装器（修复 tunnel→dokodemo-door）
+│       ├── start_xray.sh               # 手动启动 Xray 脚本
+│       ├── xray_config_template.json   # Xray 配置模板（占位符，需填入节点信息）
+│       └── tyo_xray.init              # OpenWrt init 启动脚本
+│
+└── XE300/                             # GL.iNet GL-XE300 (mips_24kc, 22.03)
+    ├── README.md                      # 完全离线安装说明 + SourceForge/断点续传踩坑
+    ├── packages/                      # 18 个离线 ipk（约 23MB）
+    │   ├── luci-app-passwall_26.9.16_all.ipk
+    │   ├── xray-core_26.9.9-1_mips_24kc.ipk
+    │   └── ...                        # chinadns-ng/geoview/coreutils/luci-compat 等
+    └── scripts/
+        └── install-passwall.sh        # opkg 本地离线一键安装
 ```
 
 ## src/ 与设备路径的映射约定
@@ -193,6 +203,16 @@ rm -f /tmp/luci-indexcache* ; rm -rf /tmp/luci-modulecache
 3. 部署 `xray_wrapper.sh` 包装器修复配置兼容性
 4. 使用 `xray_config_template.json` 模板配置代理节点
 5. 部署 `tyo_xray.init` 实现开机自启
+
+### GL.iNet GL-XE300 (XE300)
+
+**完全离线**，18 个 ipk 已随仓放在 `XE300/packages/`（设备 GL 源不可达，无法在线装）：
+
+```sh
+cd /tmp/XE300 && sh scripts/install-passwall.sh
+```
+
+透明代理所需 kmod（TPROXY/conntrack-extra/nat/ifb）GL 固件已自带。详见 [XE300/README.md](XE300/README.md)。
 
 ## 已知问题
 

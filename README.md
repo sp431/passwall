@@ -10,6 +10,7 @@ OpenWrt PassWall 代理工具的源码、安装包和配置指南，适配多种
 | Tenda BE12 Pro | aarch64_cortex-a53 | OpenWrt SNAPSHOT r34613（内核 6.18.31） | apk | 512MB 内存 / overlay 仅 65MB，精简安装 |
 | GL.iNet GL-SFT1200 | mipsel (mips32r2) | OpenWrt 18.06 | opkg | 116MB 内存，已安装 PassWall 26.9.16 + Xray v1.8.7 |
 | GL.iNet GL-XE300 | mips_24kc (大端) | OpenWrt 22.03.4 | opkg | 121MB 内存 / overlay 98MB，**完全离线**安装 PassWall 26.9.16 + Xray 26.9.9 |
+| CMCC RAX3000M | aarch64_cortex-a53 | OpenWrt 25.12.4（FanchmWrt，内核 6.12.87） | apk | MT7981B / 512MB DDR4 / 128MB NAND，**纯离线** src 部署 + 39 个 apk |
 
 > **换行符**：仓库根已加 `.gitattributes`（`* text=auto eol=lf`），在 Windows 上克隆/检出也强制 LF——OpenWrt busybox ash 无法解析 CRLF 脚本。详见各设备 README。
 
@@ -75,6 +76,13 @@ passwall/
     │   └── ...                        # chinadns-ng/geoview/coreutils/luci-compat 等
     └── scripts/
         └── install-passwall.sh        # opkg 本地离线一键安装
+│
+└── CMCC_RAX3000M/                     # 中国移动 RAX3000M (aarch64, 25.12.4)
+    ├── README.md                      # 纯离线安装说明 + 缺依赖迭代/干跑踩坑
+    ├── packages/                      # 39 个离线 apk（61MB）+ SHA256SUMS.txt
+    ├── scripts/
+    │   └── install-passwall.sh        # apk 离线一次装齐 + src 部署
+    └── src/                           # PassWall 一代前端（无 apk，必须 tar 部署）
 ```
 
 ## src/ 与设备路径的映射约定
@@ -213,6 +221,16 @@ cd /tmp/XE300 && sh scripts/install-passwall.sh
 ```
 
 透明代理所需 kmod（TPROXY/conntrack-extra/nat/ifb）GL 固件已自带。详见 [XE300/README.md](XE300/README.md)。
+
+### CMCC RAX3000M (CMCC_RAX3000M)
+
+**完全离线**，39 个 apk 已随仓放在 `CMCC_RAX3000M/packages/`（设备无 WAN、repositories 为空）：
+
+```sh
+cd /tmp/CMCC_RAX3000M && sh scripts/install-passwall.sh
+```
+
+脚本自动完成「空虚拟包绕 DCO → 39 apk 一次装齐 → 部署 src 前端 → 清缓存 → enable」。透明代理所需 kmod（nft-tproxy / nf-socket / nft-fullcone）固件已内置；设备仅 nft 无 iptables。详见 [CMCC_RAX3000M/README.md](CMCC_RAX3000M/README.md)。
 
 ## 已知问题
 
